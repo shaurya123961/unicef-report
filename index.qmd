@@ -1,0 +1,234 @@
+---
+title: "A Future at Risk"
+format:
+  html:
+    toc: true                # adds a clickable table of contents
+    toc-depth: 2             # shows up to h2 (## headings)
+    code-fold: true          # collapsible code blocks
+    code-tools: true         # adds show/hide code button
+    embed-resources: true    # makes HTML self-contained
+    fig-width: 8             # default figure width
+    fig-height: 5            # default figure height
+    number-sections: true    # numbered headings
+theme: flatly
+jupyter: python3
+---
+
+<style>
+  body {
+    background-color: #f8f9fa;
+  }
+  h1, h2, h3 {
+    color: #1CABE2;
+  }
+  .highlight-box {
+    background-color: #e6f2f8;
+    border-left: 4px solid #1CABE2;
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 6px;
+  }
+</style>
+
+
+## 🌍 A Future at Risk: Global Patterns in Adolescent Health and School Infrastructure
+
+In many low-income countries, both **education and adolescent health** are under severe strain. This report visualizes how the lack of basic school infrastructure, such as access to clean drinking water, may intersect with **AIDS-related deaths among girls aged 10–19**.
+
+By analyzing UNICEF data, we highlight countries where:
+- **School water access is low**
+- **Adolescent AIDS death rates are high**
+
+These findings aim to guide **policy, investment, and global attention** toward the regions most at risk.
+
+---
+
+## 📉 Water Access vs AIDS Death Rate
+
+This scatterplot examines the relationship between **school water access (%)** and the **rate of AIDS-related deaths among adolescent girls**.
+
+🧠 **Interpretation**:
+- Countries with low water access tend to have higher death rates
+- Suggests a negative correlation between health and infrastructure
+- Interventions may benefit both sectors at once
+
+```{python}
+#| echo: true
+#| message: false
+#| warning: false
+
+import pandas as pd
+
+# Load the UNICEF datasets
+meta = pd.read_csv("unicef_metadata.csv")
+ind1 = pd.read_csv("unicef_indicator_1.csv")
+ind2 = pd.read_csv("unicef_indicator_2.csv")
+
+# Preview data
+meta.head()
+
+# Clean and prepare AIDS data
+aids = ind1.copy()
+aids = aids[aids['sex'] == 'Female']
+aids_latest = aids.sort_values('time_period').groupby('country', as_index=False).last()
+aids_latest = aids_latest[['country', 'obs_value']].rename(columns={'obs_value': 'aids_death_rate'})
+
+# Clean and prepare Water Access data
+water = ind2.copy()
+water_latest = water.sort_values('time_period').groupby('country', as_index=False).last()
+water_latest = water_latest[['country', 'obs_value']].rename(columns={'obs_value': 'water_access_pct'})
+
+# Merge both datasets on 'country'
+combined = pd.merge(aids_latest, water_latest, on='country')
+
+# Convert to numeric just in case
+combined['aids_death_rate'] = pd.to_numeric(combined['aids_death_rate'], errors='coerce')
+combined['water_access_pct'] = pd.to_numeric(combined['water_access_pct'], errors='coerce')
+
+# Drop rows with missing values
+combined.dropna(inplace=True)
+
+import matplotlib.pyplot as plt
+import warnings
+from plotnine import *
+
+warnings.filterwarnings('ignore')
+
+# Create scatterplot with regression line
+plot = (
+    ggplot(combined, aes(x='water_access_pct', y='aids_death_rate')) +
+    geom_point(color="#1CABE2", size=2) +
+    geom_smooth(method='lm', se=False, color="#0072B2") +
+    labs(
+        title='Correlation Between Water Access and AIDS Death Rate',
+        x='School Water Access (%)',
+        y='AIDS-Related Death Rate (per 100,000 adolescent girls)'
+    ) +
+    theme_minimal() +
+    theme(
+        plot_title=element_text(size=14, weight='bold'),
+        axis_title=element_text(size=12)
+    )
+)
+
+plot
+```
+
+## 📊 Bottom 15 Countries by School Water Access
+
+This bar chart highlights the 15 countries with the **lowest access to clean water in schools**.
+
+🚨 These are the areas where:
+- Students face basic hygiene and health risks
+- Infrastructure investment is most urgently needed
+
+```{python}
+from plotnine import *
+
+# Prepare data
+bar_data = water_latest.copy()
+bar_data['water_access_pct'] = pd.to_numeric(bar_data['water_access_pct'], errors='coerce')
+bar_data = bar_data.dropna().sort_values('water_access_pct').head(15)
+
+# Plot
+fill_color = "#1CABE2"
+
+bar_plot = (
+    ggplot(bar_data, aes(x='reorder(country, water_access_pct)', y='water_access_pct')) +
+    geom_bar(stat='identity', fill=fill_color) +
+    coord_flip() +
+    labs(
+        title='📊 Bottom 15 Countries by School Water Access',
+        x='Country',
+        y='Water Access (%)'
+    ) +
+    theme_minimal() +
+    theme(
+        plot_title=element_text(size=14, weight='bold'),
+        axis_text_y=element_text(size=10),
+        axis_title=element_text(size=12)
+    )
+)
+
+bar_plot
+```
+
+## ⏳ AIDS Death Rates Over Time (Selected Countries)
+
+We selected 5 countries to examine how **AIDS-related death rates** have changed over time among adolescent girls.
+
+📈 Trends show:
+- Varying progress between countries
+- Some regions see decline, others remain stagnant
+
+```{python}
+sample_countries = ['Uganda', 'Ethiopia', 'Haiti', 'Botswana', 'South Africa']
+aids_sample = ind1[ind1['country'].isin(sample_countries)]
+aids_sample['obs_value'] = pd.to_numeric(aids_sample['obs_value'], errors='coerce')
+aids_sample['time_period'] = pd.to_numeric(aids_sample['time_period'], errors='coerce')
+
+time_plot = (
+    ggplot(aids_sample, aes(x='time_period', y='obs_value', color='country')) +
+    geom_line(size=1.2) +
+    labs(
+        title='⏳ AIDS Death Rate Over Time (Selected Countries)',
+        x='Year',
+        y='Death Rate per 100,000 Adolescent Girls'
+    ) +
+    theme_minimal() +
+    theme(
+        plot_title=element_text(size=14, weight='bold'),
+        axis_title=element_text(size=12),
+        legend_title=element_text(size=10)
+    )
+)
+
+time_plot
+```
+
+## 🗺️ Global Water Access in Schools
+
+This world map visualizes the **proportion of schools with access to improved drinking water**.
+
+🧭 Key insights:
+- Many African and South Asian countries are still below 50%
+- High-income regions show near-universal access
+
+```{python}
+import geopandas as gpd
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load shapefile
+world = gpd.read_file("data/ne_110m_admin_0_countries.shp")
+
+# Prepare water data
+water_map = water_latest.rename(columns={'country': 'ADMIN'})
+water_map['water_access_pct'] = pd.to_numeric(water_map['water_access_pct'], errors='coerce')
+
+# Merge shapefile with water data
+world_map = world.merge(water_map, on='ADMIN', how='left')
+
+# Plot
+world_map.plot(
+    column='water_access_pct',
+    cmap='Blues',
+    legend=True,
+    figsize=(15, 8),
+    edgecolor='black',
+    missing_kwds={"color": "lightgrey", "label": "No data"}
+)
+
+
+plt.title("Global Water Access in Schools", fontsize=16, fontweight = 'bold')
+plt.show()
+```
+
+## ✅ Conclusion
+
+This analysis reveals a clear overlap between poor **school infrastructure** and **adolescent health risks**.
+
+To improve outcomes, UNICEF and partner organizations should:
+- Target **dual-sector interventions**
+- Focus on **sub-Saharan Africa and South Asia**
+- Continue monitoring with **disaggregated data** (gender, age, infrastructure type)
