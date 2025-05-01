@@ -1,0 +1,130 @@
+---
+title: "A Future at Risk"
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+theme: cosmo
+jupyter: python3
+---
+
+## A Future at Risk: Global Patterns in Adolescent Health and School Infrastructure
+
+This report visualizes how the lack of school infrastructure, such as clean drinking water, may intersect with high adolescent health risks, particularly AIDS-related deaths among girls. In many low-income countries, both education and health are under stress. Investment in one area (like safe schools) may indirectly influence the other.
+
+Using data from UNICEF, we identify countries with poor water access in schools and high AIDS death rates, helping to highlight where international attention is most urgently needed.
+
+```{python}
+#| echo: true
+#| message: false
+#| warning: false
+
+import pandas as pd
+
+# Load the UNICEF datasets
+meta = pd.read_csv("unicef_metadata.csv")
+ind1 = pd.read_csv("unicef_indicator_1.csv")
+ind2 = pd.read_csv("unicef_indicator_2.csv")
+
+# Preview data
+meta.head()
+
+# Clean and prepare AIDS data
+aids = ind1.copy()
+aids = aids[aids['sex'] == 'Female']
+aids_latest = aids.sort_values('time_period').groupby('country', as_index=False).last()
+aids_latest = aids_latest[['country', 'obs_value']].rename(columns={'obs_value': 'aids_death_rate'})
+
+# Clean and prepare Water Access data
+water = ind2.copy()
+water_latest = water.sort_values('time_period').groupby('country', as_index=False).last()
+water_latest = water_latest[['country', 'obs_value']].rename(columns={'obs_value': 'water_access_pct'})
+
+# Merge both datasets on 'country'
+combined = pd.merge(aids_latest, water_latest, on='country')
+
+# Convert to numeric just in case
+combined['aids_death_rate'] = pd.to_numeric(combined['aids_death_rate'], errors='coerce')
+combined['water_access_pct'] = pd.to_numeric(combined['water_access_pct'], errors='coerce')
+
+# Drop rows with missing values
+combined.dropna(inplace=True)
+
+import matplotlib.pyplot as plt
+from plotnine import *
+
+# Create scatterplot with regression line
+plot = (ggplot(combined, aes(x='water_access_pct', y='aids_death_rate')) +
+        geom_point() +
+        geom_smooth(method='lm', se=False, color='blue') +
+        labs(title='Water Access vs AIDS Death Rate',
+             x='Water Access in Schools (%)',
+             y='AIDS-Related Death Rate (per 100,000)') +
+        theme_minimal())
+
+plot
+```
+```{python}
+from plotnine import *
+
+# Prepare data
+bar_data = water_latest.copy()
+bar_data['water_access_pct'] = pd.to_numeric(bar_data['water_access_pct'], errors='coerce')
+bar_data = bar_data.dropna().sort_values('water_access_pct').head(15)
+
+# Plot
+(
+    ggplot(bar_data, aes(x='reorder(country, water_access_pct)', y='water_access_pct')) +
+    geom_bar(stat='identity', fill='#4682B4') +
+    coord_flip() +
+    theme_minimal() +
+    labs(title='Bottom 15 Countries for Water Access',
+         x='Country',
+         y='Water Access in Schools (%)')
+)
+```
+
+```{python}
+sample_countries = ['Uganda', 'Ethiopia', 'Haiti', 'Botswana', 'South Africa']
+aids_sample = ind1[ind1['country'].isin(sample_countries)]
+aids_sample['obs_value'] = pd.to_numeric(aids_sample['obs_value'], errors='coerce')
+aids_sample['time_period'] = pd.to_numeric(aids_sample['time_period'], errors='coerce')
+
+# Plot
+(
+    ggplot(aids_sample, aes(x='time_period', y='obs_value', color='country')) +
+    geom_line() +
+    theme_minimal() +
+    labs(title='AIDS Death Rate Over Time (By Country)',
+         x='Year',
+         y='AIDS Death Rate (per 100,000)')
+)
+```
+
+```{python}
+import geopandas as gpd
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load shapefile
+world = gpd.read_file("data/ne_110m_admin_0_countries.shp")
+
+# Prepare water data
+water_map = water_latest.rename(columns={'country': 'ADMIN'})
+water_map['water_access_pct'] = pd.to_numeric(water_map['water_access_pct'], errors='coerce')
+
+# Merge shapefile with water data
+world_map = world.merge(water_map, on='ADMIN', how='left')
+
+# Plot
+world_map.plot(
+    column='water_access_pct',
+    cmap='Blues',
+    legend=True,
+    figsize=(15, 8),
+    edgecolor='black',
+    missing_kwds={"color": "lightgrey", "label": "No data"}
+)
+
+plt.show()
+```
